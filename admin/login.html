@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Menu4D — Connexion</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/admin.css" />
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0a0a0f; }
+    .login-card {
+      background: #14141a;
+      border: 1px solid #2a2a35;
+      border-radius: 12px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-card h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .login-card h1 span { color: #c9a84c; }
+    .login-card p { color: #888; font-size: 14px; margin-bottom: 32px; }
+    .login-card .form-group { margin-bottom: 20px; }
+    .login-card label { color: #aaa; font-size: 13px; display: block; margin-bottom: 6px; }
+    .login-card input {
+      width: 100%;
+      padding: 12px 16px;
+      background: #1a1a22;
+      border: 1px solid #2a2a35;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-card input:focus { border-color: #c9a84c; }
+    .login-error { color: #ef4444; font-size: 13px; margin-bottom: 16px; display: none; }
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: #c9a84c;
+      color: #0a0a0f;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .login-btn:hover { opacity: 0.9; }
+    .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h1>Menu<span>4D</span></h1>
+    <p>Connectez-vous pour gérer votre menu</p>
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="admin@lamaison.fr" required autofocus />
+      </div>
+      <div class="form-group">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required />
+      </div>
+      <p class="login-error" id="loginError"></p>
+      <button type="submit" class="login-btn" id="loginBtn">Se connecter</button>
+    </form>
+  </div>
+
+  <script>
+    const API = '/api';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errorEl = document.getElementById('loginError');
+      errorEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Connexion...';
+
+      try {
+        const res = await fetch(`${API}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('admin', JSON.stringify(data.admin));
+        window.location.href = '/admin/';
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Se connecter';
+      }
+    });
+
+    // Redirect if already logged in
+    if (localStorage.getItem('token')) {
+      window.location.href = '/admin/';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admins")
+}
+
+model Restaurant {
+  id          String   @id @default(uuid())
+  name        String
+  subtitle    String?
+  address     String?
+  phone       String?
+  logoUrl     String?  @map("logo_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  categories Category[]
+
+  @@map("restaurants")
+}
+
+model Category {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String
+  eyebrow      String?
+  sortOrder    Int      @default(0) @map("sort_order")
+  restaurantId String   @map("restaurant_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  dishes     Dish[]
+
+  @@unique([restaurantId, slug])
+  @@index([restaurantId, sortOrder])
+  @@map("categories")
+}
+
+model Dish {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  priceLabel  String?  @map("price_label")
+  allergens   String?
+  subcategory String?
+  featured    Boolean  @default(false)
+  visible     Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  categoryId  String   @map("category_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  files    DishFile[]
+
+  @@index([categoryId, sortOrder])
+  @@map("dishes")
+}
+
+model DishFile {
+  id        String   @id @default(uuid())
+  dishId    String   @map("dish_id")
+  type      FileType
+  filename  String
+  mimeType  String   @map("mime_type")
+  size      Int
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  dish Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
+  @@index([dishId, type])
+  @@map("dish_files")
+}
+
+enum FileType {
+  IMAGE
+  USDZ
+  OBJ
+  THUMBNAIL
+}
