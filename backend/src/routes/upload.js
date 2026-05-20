@@ -7,25 +7,26 @@ import path from 'path';
 const prisma = new PrismaClient();
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const ALLOWED_3D_TYPES = ['model/vnd.usdz+zip', 'application/octet-stream'];
 const ALLOWED_3D_EXTENSIONS = ['.usdz', '.obj', '.mtl', '.glb', '.gltf', '.fbx'];
-const TEXTURE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_3D_SIZE = 100 * 1024 * 1024;   // 100MB
 
-function getFileType(mimetype, filename) {
+function getFileTypeForCategory(filename, category) {
   const ext = path.extname(filename).toLowerCase();
-  
-  // 3D model files (OBJ, MTL, GLB, GLTF, FBX)
-  if (ALLOWED_3D_EXTENSIONS.includes(ext)) return 'OBJ';
-  // USDZ (AR specific)
-  if (ext === '.usdz') return 'USDZ';
-  // Images: check if it's a texture for a 3D model (by name pattern) or a dish photo
-  if (ALLOWED_IMAGE_TYPES.includes(mimetype) || TEXTURE_EXTENSIONS.includes(ext)) {
-    // Texture files typically have names like *_basecolor*, *_normal*, *_roughness*
-    const baseName = path.basename(filename, ext).toLowerCase();
-    const isTexture = /_(basecolor|normal|roughness|metallic|ao|height|opacity|emissive)/.test(baseName);
-    return isTexture ? 'OBJ' : 'IMAGE';
+
+  if (category === '3d') {
+    // Everything in the 3D upload is treated as 3D asset
+    if (ext === '.usdz') return 'USDZ';
+    if (ALLOWED_3D_EXTENSIONS.includes(ext)) return 'OBJ';
+    // Textures uploaded with 3D models
+    if (ALLOWED_IMAGE_EXTENSIONS.includes(ext)) return 'OBJ';
+    return null;
+  }
+
+  // category === 'image'
+  if (ALLOWED_IMAGE_EXTENSIONS.includes(ext) || ALLOWED_IMAGE_TYPES.includes('image/' + ext.slice(1))) {
+    return 'IMAGE';
   }
   return null;
 }
@@ -49,11 +50,17 @@ export default async function uploadRoutes(app) {
 
     const parts = request.parts();
     const uploaded = [];
+    let fileCategory = 'image'; // default
 
     for await (const part of parts) {
+      // Read the fileCategory field first
+      if (part.type === 'field' && part.fieldname === 'fileCategory') {
+        fileCategory = part.value || 'image';
+        continue;
+      }
       if (part.type !== 'file') continue;
 
-      const fileType = getFileType(part.mimetype, part.filename);
+      const fileType = getFileTypeForCategory(part.filename, fileCategory);
       if (!fileType) {
         return reply.code(400).send({
           error: `Type de fichier non supporté: ${part.filename}`,

@@ -2,7 +2,8 @@
 let restaurantData = null;
 let categoriesData = [];
 let dishesData = [];
-let pendingFiles = [];
+let pendingImageFiles = [];
+let pending3DFiles = [];
 
 // ─── Init ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -273,8 +274,10 @@ function openDishModal(id = null) {
   form.reset();
   form.querySelector('[name="id"]').value = '';
   form.querySelector('[name="visible"]').checked = true;
-  pendingFiles = [];
-  document.getElementById('dishFiles').innerHTML = '';
+  pendingImageFiles = [];
+  pending3DFiles = [];
+  document.getElementById('dishImageFiles').innerHTML = '';
+  document.getElementById('dish3DFiles').innerHTML = '';
 
   if (id) {
     const dish = dishesData.find(d => d.id === id);
@@ -301,10 +304,23 @@ function openDishModal(id = null) {
 }
 
 function renderDishFiles(files) {
-  const grid = document.getElementById('dishFiles');
-  grid.innerHTML = files.filter(f => f.type !== 'THUMBNAIL').map(f => `
+  const imageGrid = document.getElementById('dishImageFiles');
+  const threeDGrid = document.getElementById('dish3DFiles');
+
+  const imageFiles = files.filter(f => f.type === 'IMAGE');
+  const threeDFiles = files.filter(f => f.type === 'USDZ' || f.type === 'OBJ');
+
+  imageGrid.innerHTML = imageFiles.map(f => `
     <div class="upload-file">
-      ${f.type === 'IMAGE' ? `<img src="${f.url}" alt="" />` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;background:var(--surface-2);color:var(--text-dim);font-size:11px;">' + f.type + '</div>'}
+      <img src="${f.url}" alt="" />
+      <span class="file-badge">IMG</span>
+      <button class="file-remove" onclick="removeFile('${f.id}')">×</button>
+    </div>
+  `).join('');
+
+  threeDGrid.innerHTML = threeDFiles.map(f => `
+    <div class="upload-file">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:var(--surface-2);color:var(--text-dim);font-size:11px;">${f.type}<br>${f.filename.split('.').pop()}</div>
       <span class="file-badge">${f.type}</span>
       <button class="file-remove" onclick="removeFile('${f.id}')">×</button>
     </div>
@@ -351,9 +367,13 @@ async function saveDish(e) {
     }
 
     // Upload pending files
-    if (pendingFiles.length > 0) {
-      await api_upload(dish.id, pendingFiles);
-      pendingFiles = [];
+    if (pendingImageFiles.length > 0) {
+      await api_upload(dish.id, pendingImageFiles, 'image');
+      pendingImageFiles = [];
+    }
+    if (pending3DFiles.length > 0) {
+      await api_upload(dish.id, pending3DFiles, '3d');
+      pending3DFiles = [];
     }
 
     showToast(id ? 'Plat modifié' : 'Plat créé', 'success');
@@ -375,65 +395,96 @@ async function deleteDish(id) {
   }
 }
 
-// ─── File Upload (dropzone) ──────────────────────
+// ─── File Upload (dropzones) ─────────────────────
 function setupDropzone() {
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
+  // Image dropzone
+  const dzImage = document.getElementById('dropzoneImage');
+  const imageInput = document.getElementById('imageInput');
 
-  dropzone.addEventListener('dragover', (e) => {
+  dzImage.addEventListener('dragover', (e) => { e.preventDefault(); dzImage.classList.add('dragover'); });
+  dzImage.addEventListener('dragleave', () => dzImage.classList.remove('dragover'));
+  dzImage.addEventListener('drop', (e) => {
     e.preventDefault();
-    dropzone.classList.add('dragover');
+    dzImage.classList.remove('dragover');
+    handleImageFiles(e.dataTransfer.files);
   });
-  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-  dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    handleFiles(e.dataTransfer.files);
+  imageInput.addEventListener('change', () => {
+    handleImageFiles(imageInput.files);
+    imageInput.value = '';
   });
 
-  fileInput.addEventListener('change', () => {
-    handleFiles(fileInput.files);
-    fileInput.value = '';
+  // 3D dropzone
+  const dz3D = document.getElementById('dropzone3D');
+  const file3DInput = document.getElementById('file3DInput');
+
+  dz3D.addEventListener('dragover', (e) => { e.preventDefault(); dz3D.classList.add('dragover'); });
+  dz3D.addEventListener('dragleave', () => dz3D.classList.remove('dragover'));
+  dz3D.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dz3D.classList.remove('dragover');
+    handle3DFiles(e.dataTransfer.files);
+  });
+  file3DInput.addEventListener('change', () => {
+    handle3DFiles(file3DInput.files);
+    file3DInput.value = '';
   });
 }
 
-function handleFiles(fileList) {
+function handleImageFiles(fileList) {
   for (const file of fileList) {
-    pendingFiles.push(file);
+    pendingImageFiles.push(file);
   }
-  renderPendingFiles();
+  renderPendingImages();
 }
 
-function renderPendingFiles() {
-  const grid = document.getElementById('dishFiles');
-  const existing = grid.querySelectorAll('[data-pending]');
-  existing.forEach(el => el.remove());
+function handle3DFiles(fileList) {
+  for (const file of fileList) {
+    pending3DFiles.push(file);
+  }
+  renderPending3D();
+}
 
-  pendingFiles.forEach((file, i) => {
+function renderPendingImages() {
+  const grid = document.getElementById('dishImageFiles');
+  grid.querySelectorAll('[data-pending]').forEach(el => el.remove());
+
+  pendingImageFiles.forEach((file, i) => {
     const div = document.createElement('div');
     div.className = 'upload-file';
     div.dataset.pending = i;
-
-    const ext = file.name.split('.').pop().toLowerCase();
-    const type = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'IMG' : ext.toUpperCase();
-
-    if (type === 'IMG') {
-      const img = document.createElement('img');
-      img.src = URL.createObjectURL(file);
-      div.appendChild(img);
-    } else {
-      div.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;background:var(--surface-2);color:var(--text-dim);font-size:11px;">${type}</div>`;
-    }
-
-    div.innerHTML += `<span class="file-badge">${type}</span>`;
-    div.innerHTML += `<button class="file-remove" onclick="removePendingFile(${i})">×</button>`;
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    div.appendChild(img);
+    div.innerHTML += `<span class="file-badge">IMG</span>`;
+    div.innerHTML += `<button class="file-remove" onclick="removePendingImage(${i})">×</button>`;
     grid.appendChild(div);
   });
 }
 
-function removePendingFile(index) {
-  pendingFiles.splice(index, 1);
-  renderPendingFiles();
+function renderPending3D() {
+  const grid = document.getElementById('dish3DFiles');
+  grid.querySelectorAll('[data-pending]').forEach(el => el.remove());
+
+  pending3DFiles.forEach((file, i) => {
+    const div = document.createElement('div');
+    div.className = 'upload-file';
+    div.dataset.pending = i;
+    const ext = file.name.split('.').pop().toUpperCase();
+    div.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;background:var(--surface-2);color:var(--green);font-size:11px;font-weight:600;">${ext}</div>`;
+    div.innerHTML += `<span class="file-badge">${ext}</span>`;
+    div.innerHTML += `<button class="file-remove" onclick="removePending3D(${i})">×</button>`;
+    grid.appendChild(div);
+  });
+}
+
+function removePendingImage(index) {
+  pendingImageFiles.splice(index, 1);
+  renderPendingImages();
+}
+
+function removePending3D(index) {
+  pending3DFiles.splice(index, 1);
+  renderPending3D();
 }
 
 // ─── Utilities ───────────────────────────────────

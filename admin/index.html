@@ -197,12 +197,23 @@
 
                 <!-- File uploads -->
                 <div class="upload-section">
-                  <h4>Fichiers</h4>
-                  <div class="upload-grid" id="dishFiles"></div>
-                  <div class="upload-dropzone" id="dropzone">
-                    <p>Glissez vos fichiers ici ou <label for="fileInput" class="upload-link">parcourir</label></p>
-                    <p class="upload-hint">Images (JPG, PNG, WebP) · AR (USDZ) · 3D (OBJ, MTL, GLB, FBX) · Textures</p>
-                    <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.webp,.usdz,.obj,.mtl,.glb,.gltf,.fbx" hidden />
+                  <h4>Photo du plat</h4>
+                  <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Image affichée dans le menu (JPG, PNG, WebP)</p>
+                  <div class="upload-grid" id="dishImageFiles"></div>
+                  <div class="upload-dropzone" id="dropzoneImage">
+                    <p>Glissez une image ici ou <label for="imageInput" class="upload-link">parcourir</label></p>
+                    <input type="file" id="imageInput" accept=".jpg,.jpeg,.png,.webp" hidden />
+                  </div>
+                </div>
+
+                <div class="upload-section">
+                  <h4>Modèle 3D <span style="font-size:11px;color:var(--green);">(optionnel)</span></h4>
+                  <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Le client pourra voir le plat en 3D/AR. Supporté : USDZ, OBJ (+MTL +textures), GLB</p>
+                  <div class="upload-grid" id="dish3DFiles"></div>
+                  <div class="upload-dropzone" id="dropzone3D">
+                    <p>Glissez vos fichiers 3D ici ou <label for="file3DInput" class="upload-link">parcourir</label></p>
+                    <p class="upload-hint">OBJ + MTL + textures | USDZ | GLB/GLTF</p>
+                    <input type="file" id="file3DInput" multiple accept=".usdz,.obj,.mtl,.glb,.gltf,.fbx,.jpg,.jpeg,.png" hidden />
                   </div>
                 </div>
 

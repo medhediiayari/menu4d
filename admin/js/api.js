@@ -39,9 +39,10 @@ const api_put = (url, body) => api(url, { method: 'PUT', body });
 const api_patch = (url, body) => api(url, { method: 'PATCH', body });
 const api_delete = (url) => api(url, { method: 'DELETE' });
 
-async function api_upload(dishId, files) {
+async function api_upload(dishId, files, category = 'image') {
   const token = getToken();
   const formData = new FormData();
+  formData.append('fileCategory', category);
   for (const file of files) {
     formData.append('files', file);
   }

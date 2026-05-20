@@ -7,6 +7,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Tenor+Sans&family=Cormorant:ital@1&display=swap" rel="stylesheet" />
+  <!-- 3D Viewer: model-viewer for GLB/USDZ -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <!-- 3D Viewer: Three.js for OBJ -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/js/loaders/MTLLoader.js"></script>
 
   <style>
     :root {
@@ -241,7 +247,7 @@
     .menu-card-allergens { font-size: 10px; letter-spacing: 0.15em; color: var(--ivory-dim); opacity: 0.6; }
 
     /* ─── AR Badge ─────────────────────────────────── */
-    .ar-badge {
+    .ar-badge, .view3d-badge {
       position: absolute;
       top: 16px; right: 16px;
       z-index: 3;
@@ -261,8 +267,57 @@
       text-decoration: none;
       transition: background 0.3s, box-shadow 0.3s;
     }
-    .ar-badge:hover { background: var(--ar-glow); box-shadow: 0 0 20px var(--ar-glow); }
+    .ar-badge:hover, .view3d-badge:hover { background: var(--ar-glow); box-shadow: 0 0 20px var(--ar-glow); }
     .ar-dot { width: 6px; height: 6px; background: var(--ar-green); border-radius: 50%; }
+    .view3d-badge { top: auto; bottom: 16px; right: 16px; border-color: #60a5fa; color: #60a5fa; }
+    .view3d-badge:hover { background: #60a5fa22; box-shadow: 0 0 20px #60a5fa33; }
+
+    /* ─── 3D Viewer Modal ──────────────────────────── */
+    .viewer3d-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0a0806ee;
+      backdrop-filter: blur(12px);
+      z-index: 600;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    .viewer3d-overlay.open { display: flex; }
+    .viewer3d-container {
+      width: 90vw;
+      height: 75vh;
+      max-width: 900px;
+      position: relative;
+      border: 1px solid var(--border);
+      background: #0a0806;
+    }
+    .viewer3d-container model-viewer {
+      width: 100%;
+      height: 100%;
+    }
+    .viewer3d-container canvas { width: 100% !important; height: 100% !important; }
+    .viewer3d-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 24px;
+      color: var(--white);
+      margin-bottom: 16px;
+    }
+    .viewer3d-close {
+      margin-top: 16px;
+      background: none;
+      border: 1px solid var(--gold-dim);
+      color: var(--gold);
+      font-family: 'Tenor Sans', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      padding: 12px 32px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .viewer3d-close:hover { background: var(--gold-glow); }
 
     /* ─── AR Modal ─────────────────────────────────── */
     .ar-modal-overlay {
@@ -348,7 +403,7 @@
     <!-- Sections -->
     <div id="menuSections"></div>
 
-    <!-- AR Modal -->
+    <!-- AR Modal (iOS fallback) -->
     <div class="ar-modal-overlay" id="arModal">
       <div class="ar-modal">
         <h3 class="ar-modal-title">Expérience Réalité Augmentée</h3>
@@ -357,6 +412,13 @@
         </p>
         <button class="ar-modal-close" onclick="document.getElementById('arModal').classList.remove('open')">Compris</button>
       </div>
+    </div>
+
+    <!-- 3D Viewer Modal -->
+    <div class="viewer3d-overlay" id="viewer3dModal">
+      <h3 class="viewer3d-title" id="viewer3dTitle"></h3>
+      <div class="viewer3d-container" id="viewer3dContainer"></div>
+      <button class="viewer3d-close" onclick="close3DViewer()">Fermer</button>
     </div>
 
     <!-- Footer -->
@@ -449,8 +511,10 @@
     function renderDishCard(dish) {
       const img = dish.files.find(f => f.type === 'IMAGE' || f.type === 'THUMBNAIL');
       const usdzFile = dish.files.find(f => f.type === 'USDZ');
-      const objFile = dish.files.find(f => f.type === 'OBJ');
+      const objFiles = dish.files.filter(f => f.type === 'OBJ');
+      const has3D = usdzFile || objFiles.length > 0;
 
+      // AR badge (USDZ on iOS)
       const arBadge = usdzFile ? `
         <a class="ar-badge" href="${usdzFile.url}" rel="ar" data-dish="${escAttr(dish.name)}" onclick="handleAR(event, this)">
           <span class="ar-dot"></span>
@@ -458,11 +522,20 @@
         </a>
       ` : '';
 
+      // 3D viewer badge
+      const view3dBadge = has3D ? `
+        <button class="view3d-badge" onclick="open3DViewer('${escAttr(dish.name)}', ${JSON.stringify(dish.files.filter(f => f.type === 'USDZ' || f.type === 'OBJ').map(f => ({type: f.type, url: f.url}))).replace(/"/g, '&quot;')})">
+          <span class="ar-dot" style="background:#60a5fa"></span>
+          Voir en 3D
+        </button>
+      ` : '';
+
       return `
         <div class="menu-card ${dish.featured ? 'featured' : ''}">
           <div class="menu-card-img-wrap">
             ${img ? `<img src="${img.url}" alt="${escAttr(dish.name)}" loading="lazy" />` : `<div class="no-img-placeholder">${escHtml(dish.name)}</div>`}
             ${arBadge}
+            ${view3dBadge}
           </div>
           <div class="menu-card-body">
             ${dish.subcategory ? `<p class="menu-card-category">${escHtml(dish.subcategory)}</p>` : ''}
@@ -494,6 +567,152 @@
       document.getElementById('arDishName').textContent = el.dataset.dish;
       document.getElementById('arModal').classList.add('open');
     }
+
+    // ─── 3D Viewer ─────────────────────────────────
+    let currentRenderer = null;
+
+    async function open3DViewer(dishName, files) {
+      document.getElementById('viewer3dTitle').textContent = dishName;
+      document.getElementById('viewer3dModal').classList.add('open');
+      const container = document.getElementById('viewer3dContainer');
+      container.innerHTML = '<p style="color:var(--ivory-dim);text-align:center;padding:40px;">Chargement du modèle 3D...</p>';
+
+      // Check if we have a USDZ or GLB (use model-viewer) or OBJ (use Three.js)
+      const usdzFile = files.find(f => f.type === 'USDZ');
+      const objFile = files.find(f => f.type === 'OBJ' && f.url.endsWith('.obj'));
+      const glbFile = files.find(f => f.type === 'OBJ' && (f.url.endsWith('.glb') || f.url.endsWith('.gltf')));
+
+      if (glbFile || usdzFile) {
+        // Use model-viewer (best for GLB/USDZ)
+        const src = glbFile ? glbFile.url : usdzFile.url;
+        container.innerHTML = `
+          <model-viewer
+            src="${src}"
+            ${usdzFile ? `ios-src="${usdzFile.url}"` : ''}
+            auto-rotate
+            camera-controls
+            shadow-intensity="1"
+            style="width:100%;height:100%;background:#0a0806;"
+            ar
+          ></model-viewer>
+        `;
+      } else if (objFile) {
+        // Use Three.js for OBJ
+        initOBJViewer(container, objFile.url, files);
+      } else {
+        container.innerHTML = '<p style="color:var(--ivory-dim);text-align:center;padding:40px;">Format 3D non supporté pour la prévisualisation.</p>';
+      }
+    }
+
+    function initOBJViewer(container, objUrl, allFiles) {
+      container.innerHTML = '';
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0806);
+
+      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.set(0, 1, 3);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+      currentRenderer = renderer;
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(2, 3, 4);
+      scene.add(dirLight);
+      const dirLight2 = new THREE.DirectionalLight(0xc9a84c, 0.3);
+      dirLight2.position.set(-2, 1, -2);
+      scene.add(dirLight2);
+
+      // Load OBJ
+      const loader = new THREE.OBJLoader();
+
+      // Find MTL file
+      const mtlFile = allFiles.find(f => f.url && f.url.endsWith('.mtl'));
+      
+      if (mtlFile) {
+        const mtlLoader = new THREE.MTLLoader();
+        mtlLoader.load(mtlFile.url, (materials) => {
+          materials.preload();
+          loader.setMaterials(materials);
+          loadObj();
+        }, undefined, () => loadObj());
+      } else {
+        loadObj();
+      }
+
+      function loadObj() {
+        loader.load(objUrl, (obj) => {
+          // Center and scale
+          const box = new THREE.Box3().setFromObject(obj);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          obj.scale.multiplyScalar(2 / maxDim);
+          obj.position.sub(center.multiplyScalar(2 / maxDim));
+          scene.add(obj);
+        });
+      }
+
+      // Simple orbit (mouse drag)
+      let isDragging = false;
+      let prevMouse = { x: 0, y: 0 };
+      let rotation = { x: 0, y: 0 };
+
+      renderer.domElement.addEventListener('mousedown', (e) => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
+      renderer.domElement.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        rotation.y += (e.clientX - prevMouse.x) * 0.01;
+        rotation.x += (e.clientY - prevMouse.y) * 0.01;
+        prevMouse = { x: e.clientX, y: e.clientY };
+      });
+      renderer.domElement.addEventListener('mouseup', () => isDragging = false);
+      renderer.domElement.addEventListener('mouseleave', () => isDragging = false);
+
+      // Touch support
+      renderer.domElement.addEventListener('touchstart', (e) => { isDragging = true; prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+      renderer.domElement.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        rotation.y += (e.touches[0].clientX - prevMouse.x) * 0.01;
+        rotation.x += (e.touches[0].clientY - prevMouse.y) * 0.01;
+        prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      });
+      renderer.domElement.addEventListener('touchend', () => isDragging = false);
+
+      function animate() {
+        if (!document.getElementById('viewer3dModal').classList.contains('open')) return;
+        requestAnimationFrame(animate);
+        // Auto-rotate slowly when not dragging
+        if (!isDragging) rotation.y += 0.005;
+        camera.position.x = 3 * Math.sin(rotation.y) * Math.cos(rotation.x);
+        camera.position.y = 3 * Math.sin(rotation.x) + 1;
+        camera.position.z = 3 * Math.cos(rotation.y) * Math.cos(rotation.x);
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    function close3DViewer() {
+      document.getElementById('viewer3dModal').classList.remove('open');
+      document.getElementById('viewer3dContainer').innerHTML = '';
+      if (currentRenderer) {
+        currentRenderer.dispose();
+        currentRenderer = null;
+      }
+    }
+
+    // Close on overlay click
+    document.addEventListener('click', (e) => {
+      if (e.target.id === 'viewer3dModal') close3DViewer();
+    });
 
     function escHtml(str) {
       if (!str) return '';
