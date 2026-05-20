@@ -92,4 +92,5 @@ enum FileType {
   USDZ
   OBJ
   THUMBNAIL
+  TEXTURE
 }

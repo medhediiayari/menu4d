@@ -8,15 +8,25 @@ const prisma = new PrismaClient();
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_3D_TYPES = ['model/vnd.usdz+zip', 'application/octet-stream'];
+const ALLOWED_3D_EXTENSIONS = ['.usdz', '.obj', '.mtl', '.glb', '.gltf', '.fbx'];
+const TEXTURE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_3D_SIZE = 100 * 1024 * 1024;   // 100MB
 
 function getFileType(mimetype, filename) {
-  if (ALLOWED_IMAGE_TYPES.includes(mimetype)) return 'IMAGE';
   const ext = path.extname(filename).toLowerCase();
+  
+  // 3D model files (OBJ, MTL, GLB, GLTF, FBX)
+  if (ALLOWED_3D_EXTENSIONS.includes(ext)) return 'OBJ';
+  // USDZ (AR specific)
   if (ext === '.usdz') return 'USDZ';
-  if (ext === '.obj') return 'OBJ';
-  if (ext === '.glb' || ext === '.gltf') return 'OBJ'; // treat as 3D
+  // Images: check if it's a texture for a 3D model (by name pattern) or a dish photo
+  if (ALLOWED_IMAGE_TYPES.includes(mimetype) || TEXTURE_EXTENSIONS.includes(ext)) {
+    // Texture files typically have names like *_basecolor*, *_normal*, *_roughness*
+    const baseName = path.basename(filename, ext).toLowerCase();
+    const isTexture = /_(basecolor|normal|roughness|metallic|ao|height|opacity|emissive)/.test(baseName);
+    return isTexture ? 'OBJ' : 'IMAGE';
+  }
   return null;
 }
 
@@ -68,7 +78,7 @@ export default async function uploadRoutes(app) {
       const storedFilename = generateFilename(part.filename);
       let thumbnailFilename = null;
 
-      // Optimize images with sharp
+      // Optimize dish photos with sharp (skip textures and 3D files)
       if (fileType === 'IMAGE') {
         buffer = await sharp(buffer)
           .resize(1200, 900, { fit: 'cover', withoutEnlargement: true })
@@ -89,7 +99,8 @@ export default async function uploadRoutes(app) {
       const finalFilename = fileType === 'IMAGE'
         ? storedFilename.replace(/\.[^.]+$/, '.webp')
         : storedFilename;
-      await uploadFile(finalFilename, buffer, part.mimetype);
+      const finalMimeType = fileType === 'IMAGE' ? 'image/webp' : part.mimetype;
+      await uploadFile(finalFilename, buffer, finalMimeType);
 
       // Save to DB
       const fileRecord = await prisma.dishFile.create({
@@ -97,7 +108,7 @@ export default async function uploadRoutes(app) {
           dishId,
           type: fileType,
           filename: finalFilename,
-          mimeType: fileType === 'IMAGE' ? 'image/webp' : part.mimetype,
+          mimeType: finalMimeType,
           size: buffer.length,
           url: getPublicUrl(finalFilename),
         },
