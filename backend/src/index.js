@@ -11,6 +11,7 @@ import categoryRoutes from './routes/categories.js';
 import dishRoutes from './routes/dishes.js';
 import uploadRoutes from './routes/upload.js';
 import menuRoutes from './routes/menu.js';
+import analyticsRoutes from './routes/analytics.js';
 
 const app = Fastify({
   logger: true,
@@ -47,6 +48,7 @@ await app.register(categoryRoutes, { prefix: '/api/categories' });
 await app.register(dishRoutes, { prefix: '/api/dishes' });
 await app.register(uploadRoutes, { prefix: '/api/upload' });
 await app.register(menuRoutes, { prefix: '/api/menu' });
+await app.register(analyticsRoutes, { prefix: '/api/analytics' });
 
 // Health check
 app.get('/api/health', async () => ({ status: 'ok', timestamp: Date.now() }));

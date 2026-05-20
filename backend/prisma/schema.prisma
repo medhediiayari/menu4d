@@ -72,19 +72,33 @@ model Dish {
 }
 
 model DishFile {
-  id        String   @id @default(uuid())
-  dishId    String   @map("dish_id")
-  type      FileType
-  filename  String
-  mimeType  String   @map("mime_type")
-  size      Int
-  url       String
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  dishId      String   @map("dish_id")
+  type        FileType
+  filename    String
+  mimeType    String   @map("mime_type")
+  size        Int
+  url         String
+  placeholder String?  // base64 LQIP for images
+  createdAt   DateTime @default(now()) @map("created_at")
 
   dish Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
 
   @@index([dishId, type])
   @@map("dish_files")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  event     String   // page_view, dish_view, ar_click, menu_load
+  dishId    String?  @map("dish_id")
+  dishName  String?  @map("dish_name")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([event, createdAt])
+  @@index([dishId])
+  @@map("analytics_events")
 }
 
 enum FileType {

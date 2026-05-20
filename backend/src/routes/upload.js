@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import { uploadFile, getPublicUrl } from '../services/minio.js';
+import { uploadFile, getPublicUrl, getFileBuffer } from '../services/minio.js';
 import sharp from 'sharp';
 import crypto from 'crypto';
 import path from 'path';
+import { convertObjToGlb } from '../services/converter.js';
 
 const prisma = new PrismaClient();
 
@@ -84,6 +85,7 @@ export default async function uploadRoutes(app) {
 
       const storedFilename = generateFilename(part.filename);
       let thumbnailFilename = null;
+      let lqipBase64 = null;
 
       // Optimize dish photos with sharp (skip textures and 3D files)
       if (fileType === 'IMAGE') {
@@ -91,6 +93,14 @@ export default async function uploadRoutes(app) {
           .resize(1200, 900, { fit: 'cover', withoutEnlargement: true })
           .webp({ quality: 82 })
           .toBuffer();
+
+        // Generate LQIP (Low Quality Image Placeholder) — tiny base64
+        const lqipBuffer = await sharp(buffer)
+          .resize(20, 15, { fit: 'cover' })
+          .blur(2)
+          .webp({ quality: 20 })
+          .toBuffer();
+        lqipBase64 = `data:image/webp;base64,${lqipBuffer.toString('base64')}`;
 
         // Generate thumbnail
         const thumbBuffer = await sharp(buffer)
@@ -118,6 +128,7 @@ export default async function uploadRoutes(app) {
           mimeType: finalMimeType,
           size: buffer.length,
           url: getPublicUrl(finalFilename),
+          placeholder: fileType === 'IMAGE' ? lqipBase64 : null,
         },
       });
 
@@ -137,6 +148,59 @@ export default async function uploadRoutes(app) {
 
       uploaded.push(fileRecord);
     }
+
+    // Auto-convert OBJ → GLB if we have an OBJ but no GLB
+    if (fileCategory === '3d') {
+      const existingFiles = await prisma.dishFile.findMany({ where: { dishId } });
+      const hasObj = existingFiles.some(f => f.filename.endsWith('.obj'));
+      const hasGlb = existingFiles.some(f => f.filename.endsWith('.glb'));
+
+      if (hasObj && !hasGlb) {
+        try {
+          const objRecord = existingFiles.find(f => f.filename.endsWith('.obj'));
+          const mtlRecord = existingFiles.find(f => f.filename.endsWith('.mtl'));
+
+          const objBuffer = await getFileBuffer(objRecord.filename);
+          const mtlBuffer = mtlRecord ? await getFileBuffer(mtlRecord.filename) : null;
+
+          // Gather texture buffers
+          const textureFiles = existingFiles.filter(f =>
+            f.type === 'OBJ' && /\.(jpg|jpeg|png)$/i.test(f.filename)
+          );
+          const textures = {};
+          for (const tex of textureFiles) {
+            textures[tex.filename] = await getFileBuffer(tex.filename);
+          }
+
+          const glbBuffer = await convertObjToGlb(objBuffer, mtlBuffer, textures);
+
+          if (glbBuffer) {
+            const glbFilename = `${crypto.randomBytes(16).toString('hex')}.glb`;
+            await uploadFile(glbFilename, glbBuffer, 'model/gltf-binary');
+
+            const glbRecord = await prisma.dishFile.create({
+              data: {
+                dishId,
+                type: 'OBJ', // same category
+                filename: glbFilename,
+                mimeType: 'model/gltf-binary',
+                size: glbBuffer.length,
+                url: getPublicUrl(glbFilename),
+              },
+            });
+            uploaded.push(glbRecord);
+            app.log.info(`Auto-converted OBJ → GLB for dish ${dishId}`);
+          }
+        } catch (err) {
+          app.log.warn(`OBJ→GLB conversion failed for dish ${dishId}: ${err.message}`);
+          // Non-blocking — OBJ still available via Three.js
+        }
+      }
+    }
+
+    // Invalidate cache after upload
+    const { invalidateMenuCache } = await import('../services/cache.js');
+    await invalidateMenuCache();
 
     return { uploaded };
   });

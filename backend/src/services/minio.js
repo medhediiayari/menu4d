@@ -53,6 +53,15 @@ export async function deleteFile(filename) {
   }
 }
 
+export async function getFileBuffer(filename) {
+  const stream = await minioClient.getObject(config.minio.bucket, filename);
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function getPresignedUploadUrl(filename, contentType) {
   return minioClient.presignedPutObject(config.minio.bucket, filename, 3600);
 }

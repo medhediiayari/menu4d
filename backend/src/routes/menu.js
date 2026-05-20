@@ -57,6 +57,7 @@ export default async function menuRoutes(app) {
           files: dish.files.map(f => ({
             type: f.type,
             url: f.url,
+            placeholder: f.placeholder || null,
           })),
         })),
       })),

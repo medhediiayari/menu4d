@@ -32,6 +32,10 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           Plats
         </a>
+        <a href="#" class="nav-item" data-section="analytics">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Analytics
+        </a>
       </nav>
       <div class="sidebar-footer">
         <button id="logoutBtn" class="btn-logout">Déconnexion</button>
@@ -227,6 +231,47 @@
                   <button type="submit" class="btn btn-primary">Enregistrer</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section id="sec-analytics" class="section">
+          <div class="section-toolbar">
+            <select id="analyticsPeriod" class="select-filter" onchange="loadAnalytics()">
+              <option value="7">7 derniers jours</option>
+              <option value="30" selected>30 derniers jours</option>
+              <option value="90">90 derniers jours</option>
+            </select>
+          </div>
+
+          <div class="stats-grid" style="margin-bottom:24px;">
+            <div class="stat-card">
+              <div class="stat-number" id="analyticsPageViews">—</div>
+              <div class="stat-label">Vues du menu</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number" id="analyticsARClicks">—</div>
+              <div class="stat-label">Clics AR / 3D</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-number" id="analyticsDishViews">—</div>
+              <div class="stat-label">Vues de plats</div>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="form-card" style="padding:20px;">
+              <h3 style="margin-bottom:16px;font-size:14px;color:var(--text-dim);">📈 Vues quotidiennes</h3>
+              <canvas id="chartDaily" height="200"></canvas>
+            </div>
+            <div class="form-card" style="padding:20px;">
+              <h3 style="margin-bottom:16px;font-size:14px;color:var(--text-dim);">🏆 Plats les plus consultés</h3>
+              <div id="topDishesTable"></div>
+            </div>
+            <div class="form-card" style="padding:20px;">
+              <h3 style="margin-bottom:16px;font-size:14px;color:var(--text-dim);">📱 Top AR / 3D</h3>
+              <div id="topARTable"></div>
             </div>
           </div>
         </section>

@@ -57,6 +57,7 @@ function navigateTo(section) {
   if (section === 'restaurant') loadRestaurant();
   if (section === 'categories') loadCategories();
   if (section === 'dishes') loadDishes();
+  if (section === 'analytics') loadAnalytics();
 }
 
 // ─── Dashboard ───────────────────────────────────
@@ -506,4 +507,98 @@ function escHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ─── Analytics ─────────────────────────────────────
+let analyticsChart = null;
+
+async function loadAnalytics() {
+  const days = document.getElementById('analyticsPeriod')?.value || 30;
+  try {
+    const data = await api_get(`/analytics/summary?days=${days}`);
+    renderAnalytics(data);
+  } catch (err) {
+    console.error('Analytics load failed:', err);
+  }
+}
+
+function renderAnalytics(data) {
+  document.getElementById('analyticsPageViews').textContent = data.totals.pageViews.toLocaleString();
+  document.getElementById('analyticsARClicks').textContent = data.totals.arClicks.toLocaleString();
+  document.getElementById('analyticsDishViews').textContent = data.totals.dishViews.toLocaleString();
+
+  // Top dishes
+  const topDishesEl = document.getElementById('topDishesTable');
+  topDishesEl.innerHTML = data.topDishes.length === 0
+    ? '<p style="color:var(--text-dim);font-size:12px;">Aucune donnée</p>'
+    : data.topDishes.map((d, i) => `
+      <div class="analytics-rank">
+        <div class="analytics-rank-num">${i + 1}</div>
+        <div class="analytics-rank-name">${escHtml(d.name)}</div>
+        <div class="analytics-rank-count">${d.views}</div>
+      </div>
+    `).join('');
+
+  // Top AR
+  const topAREl = document.getElementById('topARTable');
+  topAREl.innerHTML = data.topAR.length === 0
+    ? '<p style="color:var(--text-dim);font-size:12px;">Aucune donnée</p>'
+    : data.topAR.map((d, i) => `
+      <div class="analytics-rank">
+        <div class="analytics-rank-num">${i + 1}</div>
+        <div class="analytics-rank-name">${escHtml(d.name)}</div>
+        <div class="analytics-rank-count">${d.clicks}</div>
+      </div>
+    `).join('');
+
+  // Daily chart (simple canvas bars)
+  renderDailyChart(data.daily);
+}
+
+function renderDailyChart(daily) {
+  const canvas = document.getElementById('chartDaily');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width - 40;
+  canvas.height = 200;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!daily || daily.length === 0) {
+    ctx.fillStyle = '#888';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.fillText('Aucune donnée', canvas.width / 2 - 40, 100);
+    return;
+  }
+
+  const maxCount = Math.max(...daily.map(d => d.count), 1);
+  const barWidth = Math.max(4, (canvas.width - 40) / daily.length - 2);
+  const chartHeight = canvas.height - 40;
+
+  daily.forEach((day, i) => {
+    const x = 30 + i * (barWidth + 2);
+    const barH = (day.count / maxCount) * chartHeight;
+    const y = chartHeight - barH + 10;
+
+    // Bar
+    ctx.fillStyle = '#c9a84c';
+    ctx.beginPath();
+    ctx.roundRect(x, y, barWidth, barH, 2);
+    ctx.fill();
+
+    // Label (show every few bars)
+    if (daily.length <= 14 || i % Math.ceil(daily.length / 7) === 0) {
+      ctx.fillStyle = '#888';
+      ctx.font = '9px Inter, sans-serif';
+      const label = new Date(day.day).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+      ctx.fillText(label, x - 4, canvas.height - 4);
+    }
+  });
+
+  // Y axis max
+  ctx.fillStyle = '#888';
+  ctx.font = '10px Inter, sans-serif';
+  ctx.fillText(maxCount.toString(), 2, 18);
+  ctx.fillText('0', 2, chartHeight + 10);
 }
