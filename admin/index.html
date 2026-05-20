@@ -208,11 +208,16 @@
 
                 <div class="upload-section">
                   <h4>Modèle 3D <span style="font-size:11px;color:var(--green);">(optionnel)</span></h4>
-                  <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Le client pourra voir le plat en 3D/AR. Supporté : USDZ, OBJ (+MTL +textures), GLB</p>
+                  <p style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Le client pourra voir le plat en 3D et en AR sur son téléphone.</p>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.8;">
+                    <strong style="color:var(--green)">📱 iOS (iPhone/iPad)</strong> : fichier <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;">.usdz</code><br>
+                    <strong style="color:var(--green)">🤖 Android</strong> : fichier <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;">.glb</code><br>
+                    <strong style="color:var(--blue)">🖥️ Desktop (3D seulement)</strong> : <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;">.obj</code> + <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;">.mtl</code> + textures
+                  </div>
                   <div class="upload-grid" id="dish3DFiles"></div>
                   <div class="upload-dropzone" id="dropzone3D">
                     <p>Glissez vos fichiers 3D ici ou <label for="file3DInput" class="upload-link">parcourir</label></p>
-                    <p class="upload-hint">OBJ + MTL + textures | USDZ | GLB/GLTF</p>
+                    <p class="upload-hint">GLB (Android AR) · USDZ (iOS AR) · OBJ + MTL + textures (Desktop 3D)</p>
                     <input type="file" id="file3DInput" multiple accept=".usdz,.obj,.mtl,.glb,.gltf,.fbx,.jpg,.jpeg,.png" hidden />
                   </div>
                 </div>

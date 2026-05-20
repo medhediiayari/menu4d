@@ -246,8 +246,8 @@
     .menu-card-price { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 300; color: var(--gold); }
     .menu-card-allergens { font-size: 10px; letter-spacing: 0.15em; color: var(--ivory-dim); opacity: 0.6; }
 
-    /* ─── AR Badge ─────────────────────────────────── */
-    .ar-badge, .view3d-badge {
+    /* ─── 3D/AR Badge ──────────────────────────────── */
+    .badge-3d {
       position: absolute;
       top: 16px; right: 16px;
       z-index: 3;
@@ -266,11 +266,11 @@
       cursor: pointer;
       text-decoration: none;
       transition: background 0.3s, box-shadow 0.3s;
+      font-family: 'Tenor Sans', sans-serif;
     }
-    .ar-badge:hover, .view3d-badge:hover { background: var(--ar-glow); box-shadow: 0 0 20px var(--ar-glow); }
-    .ar-dot { width: 6px; height: 6px; background: var(--ar-green); border-radius: 50%; }
-    .view3d-badge { top: auto; bottom: 16px; right: 16px; border-color: #60a5fa; color: #60a5fa; }
-    .view3d-badge:hover { background: #60a5fa22; box-shadow: 0 0 20px #60a5fa33; }
+    .badge-3d:hover { background: var(--ar-glow); box-shadow: 0 0 20px var(--ar-glow); }
+    .badge-3d-dot { width: 6px; height: 6px; background: var(--ar-green); border-radius: 50%; animation: dotPulse 2s ease-in-out infinite; }
+    @keyframes dotPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
     /* ─── 3D Viewer Modal ──────────────────────────── */
     .viewer3d-overlay {
@@ -283,11 +283,12 @@
       align-items: center;
       justify-content: center;
       flex-direction: column;
+      padding: 24px;
     }
     .viewer3d-overlay.open { display: flex; }
     .viewer3d-container {
       width: 90vw;
-      height: 75vh;
+      height: 70vh;
       max-width: 900px;
       position: relative;
       border: 1px solid var(--border);
@@ -319,41 +320,25 @@
     }
     .viewer3d-close:hover { background: var(--gold-glow); }
 
-    /* ─── AR Modal ─────────────────────────────────── */
-    .ar-modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: #0a080688;
-      backdrop-filter: blur(12px);
-      z-index: 500;
-      align-items: center;
-      justify-content: center;
-    }
-    .ar-modal-overlay.open { display: flex; }
-    .ar-modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 48px 40px;
-      max-width: 440px;
-      width: 90%;
-      text-align: center;
-    }
-    .ar-modal-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; color: var(--white); margin-bottom: 12px; }
-    .ar-modal-text { font-size: 13px; color: var(--ivory-dim); line-height: 1.7; margin-bottom: 28px; }
-    .ar-modal-close {
-      background: none;
-      border: 1px solid var(--gold-dim);
-      color: var(--gold);
-      font-family: 'Tenor Sans', sans-serif;
+    .viewer3d-hint {
       font-size: 11px;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      padding: 12px 32px;
-      cursor: pointer;
-      transition: background 0.3s;
+      color: var(--ivory-dim);
+      margin-top: 8px;
+      letter-spacing: 0.1em;
     }
-    .ar-modal-close:hover { background: var(--gold-glow); }
+
+    /* model-viewer custom styles */
+    model-viewer {
+      --poster-color: #0a0806;
+    }
+    model-viewer::part(default-ar-button) {
+      background: var(--ar-green);
+      border-radius: 20px;
+      padding: 8px 16px;
+      font-size: 12px;
+      bottom: 16px;
+      right: 16px;
+    }
 
     /* ─── Footer ───────────────────────────────────── */
     footer {
@@ -403,21 +388,11 @@
     <!-- Sections -->
     <div id="menuSections"></div>
 
-    <!-- AR Modal (iOS fallback) -->
-    <div class="ar-modal-overlay" id="arModal">
-      <div class="ar-modal">
-        <h3 class="ar-modal-title">Expérience Réalité Augmentée</h3>
-        <p class="ar-modal-text">
-          La vue en AR de <strong id="arDishName" style="color: var(--gold)">ce plat</strong> est disponible sur iPhone et iPad.
-        </p>
-        <button class="ar-modal-close" onclick="document.getElementById('arModal').classList.remove('open')">Compris</button>
-      </div>
-    </div>
-
-    <!-- 3D Viewer Modal -->
-    <div class="viewer3d-overlay" id="viewer3dModal">
+    <!-- 3D/AR Viewer Modal -->
+    <div class="viewer3d-overlay" id="viewer3dModal" onclick="if(event.target===this)close3DViewer()">
       <h3 class="viewer3d-title" id="viewer3dTitle"></h3>
       <div class="viewer3d-container" id="viewer3dContainer"></div>
+      <p class="viewer3d-hint" id="viewer3dHint"></p>
       <button class="viewer3d-close" onclick="close3DViewer()">Fermer</button>
     </div>
 
@@ -512,21 +487,15 @@
       const img = dish.files.find(f => f.type === 'IMAGE' || f.type === 'THUMBNAIL');
       const usdzFile = dish.files.find(f => f.type === 'USDZ');
       const objFiles = dish.files.filter(f => f.type === 'OBJ');
-      const has3D = usdzFile || objFiles.length > 0;
+      const glbFile = objFiles.find(f => f.url.endsWith('.glb') || f.url.endsWith('.gltf'));
+      const objFile = objFiles.find(f => f.url.endsWith('.obj'));
+      const has3D = usdzFile || glbFile || objFile;
 
-      // AR badge (USDZ on iOS)
-      const arBadge = usdzFile ? `
-        <a class="ar-badge" href="${usdzFile.url}" rel="ar" data-dish="${escAttr(dish.name)}" onclick="handleAR(event, this)">
-          <span class="ar-dot"></span>
-          Voir en AR
-        </a>
-      ` : '';
-
-      // 3D viewer badge
-      const view3dBadge = has3D ? `
-        <button class="view3d-badge" onclick="open3DViewer('${escAttr(dish.name)}', ${JSON.stringify(dish.files.filter(f => f.type === 'USDZ' || f.type === 'OBJ').map(f => ({type: f.type, url: f.url}))).replace(/"/g, '&quot;')})">
-          <span class="ar-dot" style="background:#60a5fa"></span>
-          Voir en 3D
+      // Single unified 3D/AR button
+      const badge3d = has3D ? `
+        <button class="badge-3d" onclick='open3DViewer(${JSON.stringify({name: dish.name, files: dish.files.filter(f => f.type === "USDZ" || f.type === "OBJ").map(f => ({type: f.type, url: f.url}))}).replace(/'/g, "&#39;")})'>
+          <span class="badge-3d-dot"></span>
+          3D / AR
         </button>
       ` : '';
 
@@ -534,8 +503,7 @@
         <div class="menu-card ${dish.featured ? 'featured' : ''}">
           <div class="menu-card-img-wrap">
             ${img ? `<img src="${img.url}" alt="${escAttr(dish.name)}" loading="lazy" />` : `<div class="no-img-placeholder">${escHtml(dish.name)}</div>`}
-            ${arBadge}
-            ${view3dBadge}
+            ${badge3d}
           </div>
           <div class="menu-card-body">
             ${dish.subcategory ? `<p class="menu-card-category">${escHtml(dish.subcategory)}</p>` : ''}
@@ -560,51 +528,64 @@
     }
 
     function handleAR(event, el) {
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) return true;
+      // Not used anymore — kept for backward compat
       event.preventDefault();
-      document.getElementById('arDishName').textContent = el.dataset.dish;
-      document.getElementById('arModal').classList.add('open');
     }
 
-    // ─── 3D Viewer ─────────────────────────────────
+    // ─── 3D/AR Viewer (unified) ─────────────────────
     let currentRenderer = null;
 
-    async function open3DViewer(dishName, files) {
-      document.getElementById('viewer3dTitle').textContent = dishName;
+    function open3DViewer(data) {
+      const { name, files } = data;
+      document.getElementById('viewer3dTitle').textContent = name;
       document.getElementById('viewer3dModal').classList.add('open');
       const container = document.getElementById('viewer3dContainer');
+      const hint = document.getElementById('viewer3dHint');
       container.innerHTML = '<p style="color:var(--ivory-dim);text-align:center;padding:40px;">Chargement du modèle 3D...</p>';
 
-      // Check if we have a USDZ or GLB (use model-viewer) or OBJ (use Three.js)
       const usdzFile = files.find(f => f.type === 'USDZ');
-      const objFile = files.find(f => f.type === 'OBJ' && f.url.endsWith('.obj'));
-      const glbFile = files.find(f => f.type === 'OBJ' && (f.url.endsWith('.glb') || f.url.endsWith('.gltf')));
+      const glbFile = files.find(f => f.url.endsWith('.glb') || f.url.endsWith('.gltf'));
+      const objFile = files.find(f => f.url.endsWith('.obj'));
+      const mtlFile = files.find(f => f.url.endsWith('.mtl'));
 
       if (glbFile || usdzFile) {
-        // Use model-viewer (best for GLB/USDZ)
+        // model-viewer: handles iOS AR (USDZ), Android AR (GLB via Scene Viewer), and desktop 3D
         const src = glbFile ? glbFile.url : usdzFile.url;
         container.innerHTML = `
           <model-viewer
             src="${src}"
             ${usdzFile ? `ios-src="${usdzFile.url}"` : ''}
+            ar
+            ar-modes="webxr scene-viewer quick-look"
             auto-rotate
             camera-controls
             shadow-intensity="1"
+            environment-image="neutral"
             style="width:100%;height:100%;background:#0a0806;"
-            ar
-          ></model-viewer>
+            ar-button-label="Voir en AR"
+          >
+            <button slot="ar-button" style="
+              position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+              background:#4ade80;color:#000;border:none;border-radius:20px;
+              padding:10px 24px;font-size:12px;font-weight:600;letter-spacing:0.1em;
+              text-transform:uppercase;cursor:pointer;font-family:'Tenor Sans',sans-serif;
+            ">
+              📱 Voir en AR
+            </button>
+          </model-viewer>
         `;
+        hint.textContent = 'Faites glisser pour tourner · Sur mobile : bouton AR pour voir dans votre espace';
       } else if (objFile) {
-        // Use Three.js for OBJ
-        initOBJViewer(container, objFile.url, files);
+        // Three.js for OBJ files
+        initOBJViewer(container, objFile.url, mtlFile ? mtlFile.url : null);
+        hint.textContent = 'Faites glisser pour tourner le modèle';
       } else {
-        container.innerHTML = '<p style="color:var(--ivory-dim);text-align:center;padding:40px;">Format 3D non supporté pour la prévisualisation.</p>';
+        container.innerHTML = '<p style="color:var(--ivory-dim);text-align:center;padding:40px;">Aucun modèle 3D compatible trouvé.</p>';
+        hint.textContent = '';
       }
     }
 
-    function initOBJViewer(container, objUrl, allFiles) {
+    function initOBJViewer(container, objUrl, mtlUrl) {
       container.innerHTML = '';
       const width = container.clientWidth;
       const height = container.clientHeight;
@@ -634,12 +615,9 @@
       // Load OBJ
       const loader = new THREE.OBJLoader();
 
-      // Find MTL file
-      const mtlFile = allFiles.find(f => f.url && f.url.endsWith('.mtl'));
-      
-      if (mtlFile) {
+      if (mtlUrl) {
         const mtlLoader = new THREE.MTLLoader();
-        mtlLoader.load(mtlFile.url, (materials) => {
+        mtlLoader.load(mtlUrl, (materials) => {
           materials.preload();
           loader.setMaterials(materials);
           loadObj();
@@ -703,16 +681,12 @@
     function close3DViewer() {
       document.getElementById('viewer3dModal').classList.remove('open');
       document.getElementById('viewer3dContainer').innerHTML = '';
+      document.getElementById('viewer3dHint').textContent = '';
       if (currentRenderer) {
         currentRenderer.dispose();
         currentRenderer = null;
       }
     }
-
-    // Close on overlay click
-    document.addEventListener('click', (e) => {
-      if (e.target.id === 'viewer3dModal') close3DViewer();
-    });
 
     function escHtml(str) {
       if (!str) return '';
