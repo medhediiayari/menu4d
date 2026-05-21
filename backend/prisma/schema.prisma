@@ -17,14 +17,20 @@ model Admin {
 }
 
 model Restaurant {
-  id          String   @id @default(uuid())
-  name        String
-  subtitle    String?
-  address     String?
-  phone       String?
-  logoUrl     String?  @map("logo_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  subtitle        String?
+  address         String?
+  phone           String?
+  logoUrl         String?  @map("logo_url")
+  primaryColor    String?  @default("#c9a84c") @map("primary_color")
+  secondaryColor  String?  @default("#0a0806") @map("secondary_color")
+  accentColor     String?  @default("#f0e8d8") @map("accent_color")
+  googleReviewUrl String?  @map("google_review_url")
+  whatsappNumber  String?  @map("whatsapp_number")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   categories Category[]
 

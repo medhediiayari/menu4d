@@ -553,6 +553,29 @@
       text-transform: uppercase;
     }
 
+    /* ─── Image Lightbox ────────────────────────────────── */
+    .img-lightbox-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 8, 6, 0.92);
+      backdrop-filter: blur(16px);
+      z-index: 600;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+      animation: fadeIn 0.3s ease;
+    }
+    .img-lightbox-overlay.open { display: flex; }
+    .img-lightbox-overlay img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 4px;
+      box-shadow: 0 20px 80px rgba(0,0,0,0.6);
+      animation: fadeUp 0.4s ease forwards;
+    }
+
     /* ─── Responsive ─────────────────────────────────────── */
     @media (max-width: 600px) {
       .menu-grid { grid-template-columns: 1fr; gap: 1px; }
@@ -957,6 +980,11 @@
     </div>
   </div>
 
+  <!-- ── Image Lightbox ─────────────────────────────── -->
+  <div class="img-lightbox-overlay" id="imgLightbox">
+    <img src="" alt="" id="imgLightboxImg" />
+  </div>
+
   <!-- ── Footer ─────────────────────────────────────── -->
   <footer>
     <p class="footer-logo">La Maison</p>
@@ -1012,6 +1040,23 @@
 
     document.getElementById('arModal').addEventListener('click', function(e) {
       if (e.target === this) closeARModal();
+    });
+
+    // ── Image Lightbox ────────────────────────────────────
+    const imgLightbox = document.getElementById('imgLightbox');
+    const imgLightboxImg = document.getElementById('imgLightboxImg');
+
+    document.querySelectorAll('.menu-card-img-wrap img').forEach(img => {
+      img.style.cursor = 'zoom-in';
+      img.addEventListener('click', () => {
+        imgLightboxImg.src = img.src;
+        imgLightboxImg.alt = img.alt;
+        imgLightbox.classList.add('open');
+      });
+    });
+
+    imgLightbox.addEventListener('click', () => {
+      imgLightbox.classList.remove('open');
     });
 
     // ── Scroll reveal for cards ─────────────────────────

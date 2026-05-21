@@ -1,15 +1,20 @@
 // ─── Admin App ──────────────────────────────────
-let restaurantData = null;
+let restaurantsData = [];
+let currentRestaurantId = null;
 let categoriesData = [];
 let dishesData = [];
 let pendingImageFiles = [];
 let pending3DFiles = [];
+let pendingLogoFile = null;
 
 // ─── Init ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   // Set admin email
   const admin = JSON.parse(localStorage.getItem('admin') || '{}');
   document.getElementById('adminEmail').textContent = admin.email || '';
+
+  // Restore active restaurant
+  currentRestaurantId = localStorage.getItem('currentRestaurantId') || null;
 
   // Nav
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -30,9 +35,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('restaurantForm').addEventListener('submit', saveRestaurant);
   document.getElementById('categoryForm').addEventListener('submit', saveCategory);
   document.getElementById('dishForm').addEventListener('submit', saveDish);
+  document.getElementById('addRestaurantBtn').addEventListener('click', () => openRestaurantModal());
   document.getElementById('addCategoryBtn').addEventListener('click', () => openCategoryModal());
   document.getElementById('addDishBtn').addEventListener('click', () => openDishModal());
   document.getElementById('filterCategory').addEventListener('change', loadDishes);
+
+  // Color pickers sync
+  setupColorSync();
+
+  // Logo upload
+  setupLogoUpload();
 
   // File upload
   setupDropzone();
@@ -40,6 +52,56 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load data
   await loadDashboard();
 });
+
+// ─── Color picker sync ───────────────────────────
+function setupColorSync() {
+  const pairs = [
+    ['primaryColor', 'primaryColorHex'],
+    ['secondaryColor', 'secondaryColorHex'],
+    ['accentColor', 'accentColorHex'],
+  ];
+  pairs.forEach(([colorName, hexName]) => {
+    const colorInput = document.querySelector(`[name="${colorName}"]`);
+    const hexInput = document.querySelector(`[name="${hexName}"]`);
+    if (!colorInput || !hexInput) return;
+    colorInput.addEventListener('input', () => { hexInput.value = colorInput.value; });
+    hexInput.addEventListener('input', () => {
+      if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) {
+        colorInput.value = hexInput.value;
+      }
+    });
+  });
+}
+
+// ─── Logo Upload ─────────────────────────────────
+function setupLogoUpload() {
+  const dz = document.getElementById('dropzoneLogo');
+  const input = document.getElementById('logoInput');
+  if (!dz || !input) return;
+
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dz.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      pendingLogoFile = e.dataTransfer.files[0];
+      showLogoPreview(pendingLogoFile);
+    }
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length) {
+      pendingLogoFile = input.files[0];
+      showLogoPreview(pendingLogoFile);
+    }
+  });
+}
+
+function showLogoPreview(file) {
+  const preview = document.getElementById('logoPreview');
+  const url = URL.createObjectURL(file);
+  preview.innerHTML = `<img src="${url}" style="max-width:100px;max-height:60px;border-radius:6px;border:1px solid var(--border);" />`;
+}
 
 // ─── Navigation ──────────────────────────────────
 function navigateTo(section) {
@@ -54,7 +116,7 @@ function navigateTo(section) {
 
   // Load section data
   if (section === 'dashboard') loadDashboard();
-  if (section === 'restaurant') loadRestaurant();
+  if (section === 'restaurants') loadRestaurants();
   if (section === 'categories') loadCategories();
   if (section === 'dishes') loadDishes();
   if (section === 'analytics') loadAnalytics();
@@ -63,60 +125,240 @@ function navigateTo(section) {
 // ─── Dashboard ───────────────────────────────────
 async function loadDashboard() {
   try {
-    const [cats, dishes] = await Promise.all([
-      api_get('/categories'),
-      api_get('/dishes'),
-    ]);
-    categoriesData = cats;
-    dishesData = dishes;
+    restaurantsData = await api_get('/restaurant');
+    updateRestaurantSelector();
 
-    document.getElementById('statCategories').textContent = cats.length;
-    document.getElementById('statDishes').textContent = dishes.length;
-    document.getElementById('statAR').textContent = dishes.reduce((n, d) =>
-      n + d.files.filter(f => f.type === 'USDZ' || f.type === 'OBJ').length, 0);
-    document.getElementById('statImages').textContent = dishes.reduce((n, d) =>
-      n + d.files.filter(f => f.type === 'IMAGE').length, 0);
+    document.getElementById('statCategories').textContent = restaurantsData.reduce((n, r) => n + (r.categories?.length || 0), 0);
+    document.getElementById('statDishes').textContent = restaurantsData.reduce((n, r) =>
+      n + (r.categories?.reduce((m, c) => m + (c._count?.dishes || 0), 0) || 0), 0);
+    document.getElementById('statAR').textContent = restaurantsData.length + ' restaurants';
+    document.getElementById('statImages').textContent = '—';
   } catch (err) {
     showToast(err.message, 'error');
   }
 }
 
-// ─── Restaurant ──────────────────────────────────
-async function loadRestaurant() {
+function updateRestaurantSelector() {
+  const sel = document.getElementById('activeRestaurantSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Sélectionner un restaurant —</option>' +
+    restaurantsData.map(r => `<option value="${r.id}" ${r.id === currentRestaurantId ? 'selected' : ''}>${escHtml(r.name)}</option>`).join('');
+}
+
+function switchRestaurant() {
+  const sel = document.getElementById('activeRestaurantSelect');
+  currentRestaurantId = sel.value || null;
+  localStorage.setItem('currentRestaurantId', currentRestaurantId || '');
+  categoriesData = [];
+  loadRestaurants();
+}
+
+// ─── Restaurants ─────────────────────────────────
+async function loadRestaurants() {
   try {
-    restaurantData = await api_get('/restaurant');
-    const form = document.getElementById('restaurantForm');
-    if (restaurantData) {
-      form.name.value = restaurantData.name || '';
-      form.subtitle.value = restaurantData.subtitle || '';
-      form.address.value = restaurantData.address || '';
-      form.phone.value = restaurantData.phone || '';
-    }
+    restaurantsData = await api_get('/restaurant');
+    updateRestaurantSelector();
+    renderRestaurants();
   } catch (err) {
     showToast(err.message, 'error');
   }
+}
+
+function renderRestaurants() {
+  const grid = document.getElementById('restaurantsList');
+  if (!restaurantsData.length) {
+    grid.innerHTML = '<p style="color:var(--text-dim)">Aucun restaurant. Créez-en un !</p>';
+    return;
+  }
+
+  grid.innerHTML = restaurantsData.map(r => {
+    const totalDishes = r.categories?.reduce((n, c) => n + (c._count?.dishes || 0), 0) || 0;
+    return `
+      <div class="restaurant-card">
+        <div class="restaurant-card-header">
+          <div class="restaurant-card-logo">
+            ${r.logoUrl ? `<img src="${escHtml(r.logoUrl)}" alt="" />` : '🏪'}
+          </div>
+          <div class="restaurant-card-info">
+            <h4>${escHtml(r.name)}</h4>
+            <p>${escHtml(r.subtitle || r.address || '')}</p>
+            <div class="restaurant-card-colors">
+              <span class="swatch" style="background:${r.primaryColor || '#c9a84c'}"></span>
+              <span class="swatch" style="background:${r.secondaryColor || '#0a0806'}"></span>
+              <span class="swatch" style="background:${r.accentColor || '#f0e8d8'}"></span>
+            </div>
+          </div>
+        </div>
+        <div class="restaurant-card-body">
+          <span>📂 ${r.categories?.length || 0} catégories · 🍽️ ${totalDishes} plats</span>
+          ${r.googleReviewUrl ? '<span>⭐ Google Review configuré</span>' : ''}
+          ${r.whatsappNumber ? '<span>💬 WhatsApp: ' + escHtml(r.whatsappNumber) + '</span>' : ''}
+          <span style="font-family:monospace;font-size:11px;color:var(--gold);">/menu/${escHtml(r.slug)}</span>
+        </div>
+        <div class="restaurant-card-footer">
+          <button class="btn btn-sm btn-secondary" onclick="openRestaurantModal('${r.id}')">✏️ Modifier</button>
+          <button class="btn btn-sm btn-secondary" onclick="showQRCode('${r.id}')">📱 QR Code</button>
+          <button class="btn btn-sm btn-outline" onclick="selectRestaurant('${r.id}')">Gérer le menu</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteRestaurant('${r.id}')">Supprimer</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectRestaurant(id) {
+  currentRestaurantId = id;
+  localStorage.setItem('currentRestaurantId', id);
+  categoriesData = [];
+  updateRestaurantSelector();
+  navigateTo('categories');
+  showToast('Restaurant sélectionné', 'success');
+}
+
+function openRestaurantModal(id = null) {
+  const form = document.getElementById('restaurantForm');
+  form.reset();
+  form.querySelector('[name="id"]').value = '';
+  pendingLogoFile = null;
+  document.getElementById('logoPreview').innerHTML = '';
+
+  // Reset color pickers
+  form.querySelector('[name="primaryColor"]').value = '#c9a84c';
+  form.querySelector('[name="primaryColorHex"]').value = '#c9a84c';
+  form.querySelector('[name="secondaryColor"]').value = '#0a0806';
+  form.querySelector('[name="secondaryColorHex"]').value = '#0a0806';
+  form.querySelector('[name="accentColor"]').value = '#f0e8d8';
+  form.querySelector('[name="accentColorHex"]').value = '#f0e8d8';
+
+  if (id) {
+    const r = restaurantsData.find(x => x.id === id);
+    if (r) {
+      document.getElementById('restaurantModalTitle').textContent = 'Modifier le restaurant';
+      form.querySelector('[name="id"]').value = r.id;
+      form.querySelector('[name="name"]').value = r.name || '';
+      form.querySelector('[name="slug"]').value = r.slug || '';
+      form.querySelector('[name="subtitle"]').value = r.subtitle || '';
+      form.querySelector('[name="address"]').value = r.address || '';
+      form.querySelector('[name="phone"]').value = r.phone || '';
+      form.querySelector('[name="googleReviewUrl"]').value = r.googleReviewUrl || '';
+      form.querySelector('[name="whatsappNumber"]').value = r.whatsappNumber || '';
+      form.querySelector('[name="logoUrl"]').value = r.logoUrl || '';
+      if (r.primaryColor) {
+        form.querySelector('[name="primaryColor"]').value = r.primaryColor;
+        form.querySelector('[name="primaryColorHex"]').value = r.primaryColor;
+      }
+      if (r.secondaryColor) {
+        form.querySelector('[name="secondaryColor"]').value = r.secondaryColor;
+        form.querySelector('[name="secondaryColorHex"]').value = r.secondaryColor;
+      }
+      if (r.accentColor) {
+        form.querySelector('[name="accentColor"]').value = r.accentColor;
+        form.querySelector('[name="accentColorHex"]').value = r.accentColor;
+      }
+      if (r.logoUrl) {
+        document.getElementById('logoPreview').innerHTML = `<img src="${escHtml(r.logoUrl)}" style="max-width:100px;max-height:60px;border-radius:6px;border:1px solid var(--border);" />`;
+      }
+    }
+  } else {
+    document.getElementById('restaurantModalTitle').textContent = 'Nouveau restaurant';
+  }
+  openModal('restaurantModal');
 }
 
 async function saveRestaurant(e) {
   e.preventDefault();
   const form = e.target;
+  const id = form.querySelector('[name="id"]').value;
+  const data = {
+    name: form.querySelector('[name="name"]').value,
+    slug: form.querySelector('[name="slug"]').value,
+    subtitle: form.querySelector('[name="subtitle"]').value || null,
+    address: form.querySelector('[name="address"]').value || null,
+    phone: form.querySelector('[name="phone"]').value || null,
+    logoUrl: form.querySelector('[name="logoUrl"]').value || null,
+    primaryColor: form.querySelector('[name="primaryColor"]').value,
+    secondaryColor: form.querySelector('[name="secondaryColor"]').value,
+    accentColor: form.querySelector('[name="accentColor"]').value,
+    googleReviewUrl: form.querySelector('[name="googleReviewUrl"]').value || null,
+    whatsappNumber: form.querySelector('[name="whatsappNumber"]').value || null,
+  };
+
   try {
-    await api_put('/restaurant', {
-      name: form.name.value,
-      subtitle: form.subtitle.value,
-      address: form.address.value,
-      phone: form.phone.value,
-    });
-    showToast('Restaurant mis à jour', 'success');
+    if (id) {
+      await api_put(`/restaurant/${id}`, data);
+      showToast('Restaurant mis à jour', 'success');
+    } else {
+      const created = await api_post('/restaurant', data);
+      currentRestaurantId = created.id;
+      localStorage.setItem('currentRestaurantId', created.id);
+      showToast('Restaurant créé', 'success');
+    }
+    closeModal('restaurantModal');
+    await loadRestaurants();
   } catch (err) {
     showToast(err.message, 'error');
   }
 }
 
+async function deleteRestaurant(id) {
+  if (!confirm('Supprimer ce restaurant et tout son contenu (catégories, plats) ?')) return;
+  try {
+    await api_delete(`/restaurant/${id}`);
+    if (currentRestaurantId === id) {
+      currentRestaurantId = null;
+      localStorage.removeItem('currentRestaurantId');
+    }
+    showToast('Restaurant supprimé', 'success');
+    await loadRestaurants();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ─── QR Code ─────────────────────────────────────
+function showQRCode(id) {
+  const r = restaurantsData.find(x => x.id === id);
+  if (!r) return;
+
+  const menuUrl = `${window.location.origin}/menu/${r.slug}`;
+  document.getElementById('qrRestaurantName').textContent = r.name;
+  document.getElementById('qrMenuUrl').textContent = menuUrl;
+
+  const container = document.getElementById('qrCodeContainer');
+  container.innerHTML = '';
+
+  if (typeof QRCode !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    QRCode.toCanvas(canvas, menuUrl, {
+      width: 256,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+    container.appendChild(canvas);
+  } else {
+    container.innerHTML = `<p style="color:#000;padding:20px;">QR: ${escHtml(menuUrl)}</p>`;
+  }
+
+  openModal('qrModal');
+}
+
+function downloadQR() {
+  const canvas = document.querySelector('#qrCodeContainer canvas');
+  if (!canvas) return;
+  const link = document.createElement('a');
+  link.download = 'qr-menu.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
 // ─── Categories ──────────────────────────────────
 async function loadCategories() {
+  if (!currentRestaurantId) {
+    document.getElementById('categoriesList').innerHTML = '<p style="color:var(--text-dim)">Sélectionnez d\'abord un restaurant dans la section Restaurants.</p>';
+    return;
+  }
   try {
-    categoriesData = await api_get('/categories');
+    categoriesData = await api_get('/categories?restaurantId=' + currentRestaurantId);
     renderCategories();
   } catch (err) {
     showToast(err.message, 'error');
@@ -179,9 +421,11 @@ async function saveCategory(e) {
       await api_put(`/categories/${form.id.value}`, data);
       showToast('Catégorie modifiée', 'success');
     } else {
-      // Need restaurant ID
-      if (!restaurantData) restaurantData = await api_get('/restaurant');
-      data.restaurantId = restaurantData.id;
+      if (!currentRestaurantId) {
+        showToast('Sélectionnez d\'abord un restaurant', 'error');
+        return;
+      }
+      data.restaurantId = currentRestaurantId;
       await api_post('/categories', data);
       showToast('Catégorie créée', 'success');
     }
@@ -205,9 +449,13 @@ async function deleteCategory(id) {
 
 // ─── Dishes ──────────────────────────────────────
 async function loadDishes() {
+  if (!currentRestaurantId) {
+    document.getElementById('dishesList').innerHTML = '<p style="color:var(--text-dim)">Sélectionnez d\'abord un restaurant dans la section Restaurants.</p>';
+    return;
+  }
   try {
     if (!categoriesData.length) {
-      categoriesData = await api_get('/categories');
+      categoriesData = await api_get('/categories?restaurantId=' + currentRestaurantId);
     }
 
     // Populate filter
