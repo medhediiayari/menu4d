@@ -20,7 +20,7 @@
     "ioredis": "^5.4.0",
     "bcrypt": "^5.1.0",
     "sharp": "^0.33.0",
-    "obj2gltf": "^4.1.0"
+    "obj2gltf": "^3.2.0"
   },
   "devDependencies": {
     "prisma": "^6.0.0"
