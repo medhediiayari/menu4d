@@ -25,6 +25,7 @@ async function seed() {
     create: {
       id: 'default-restaurant',
       name: 'La Maison',
+      slug: 'la-maison',
       subtitle: 'Une cuisine d\'exception, une expérience inoubliable',
       address: '12 Rue Saint-Honoré, Paris 75001',
       phone: '+33 1 42 00 00 00',
