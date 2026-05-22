@@ -13,17 +13,7 @@ export default async function restaurantRoutes(app) {
     return restaurants;
   });
 
-  // Get single restaurant by ID
-  app.get('/:id', async (request) => {
-    const restaurant = await prisma.restaurant.findUnique({
-      where: { id: request.params.id },
-      include: { categories: { orderBy: { sortOrder: 'asc' } } },
-    });
-    if (!restaurant) throw { statusCode: 404, message: 'Restaurant non trouvé' };
-    return restaurant;
-  });
-
-  // Get restaurant by slug (public)
+  // Get restaurant by slug (public) — must be registered before /:id
   app.get('/slug/:slug', async (request) => {
     const restaurant = await prisma.restaurant.findUnique({
       where: { slug: request.params.slug },
@@ -39,6 +29,16 @@ export default async function restaurantRoutes(app) {
           },
         },
       },
+    });
+    if (!restaurant) throw { statusCode: 404, message: 'Restaurant non trouvé' };
+    return restaurant;
+  });
+
+  // Get single restaurant by ID
+  app.get('/:id', { preHandler: [app.authenticate] }, async (request) => {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: request.params.id },
+      include: { categories: { orderBy: { sortOrder: 'asc' } } },
     });
     if (!restaurant) throw { statusCode: 404, message: 'Restaurant non trouvé' };
     return restaurant;

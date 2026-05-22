@@ -143,6 +143,22 @@ function updateRestaurantSelector() {
   if (!sel) return;
   sel.innerHTML = '<option value="">— Sélectionner un restaurant —</option>' +
     restaurantsData.map(r => `<option value="${r.id}" ${r.id === currentRestaurantId ? 'selected' : ''}>${escHtml(r.name)}</option>`).join('');
+  updateSidebarRestaurantCtx();
+}
+
+function updateSidebarRestaurantCtx() {
+  const ctx = document.getElementById('sidebarRestaurantCtx');
+  const nameEl = document.getElementById('sidebarRestaurantName');
+  if (!ctx || !nameEl) return;
+  if (currentRestaurantId) {
+    const r = restaurantsData.find(x => x.id === currentRestaurantId);
+    if (r) {
+      nameEl.textContent = r.name;
+      ctx.style.display = 'block';
+      return;
+    }
+  }
+  ctx.style.display = 'none';
 }
 
 function switchRestaurant() {
@@ -150,6 +166,14 @@ function switchRestaurant() {
   currentRestaurantId = sel.value || null;
   localStorage.setItem('currentRestaurantId', currentRestaurantId || '');
   categoriesData = [];
+  updateSidebarRestaurantCtx();
+  // Refresh current section if it depends on the selected restaurant
+  const activeSection = document.querySelector('.section.active');
+  if (activeSection) {
+    const id = activeSection.id.replace('sec-', '');
+    if (id === 'categories') loadCategories();
+    else if (id === 'dishes') loadDishes();
+  }
   loadRestaurants();
 }
 
@@ -472,7 +496,9 @@ async function loadDishes() {
     ).join('');
 
     // Load dishes
-    const params = filter.value ? `?categoryId=${filter.value}` : '';
+    const params = filter.value
+      ? `?categoryId=${filter.value}`
+      : `?restaurantId=${currentRestaurantId}`;
     dishesData = await api_get(`/dishes${params}`);
     renderDishes();
   } catch (err) {

@@ -5,10 +5,15 @@ import { deleteFile } from '../services/minio.js';
 const prisma = new PrismaClient();
 
 export default async function dishRoutes(app) {
-  // List dishes (with optional category filter)
+  // List dishes (with optional category and/or restaurant filter)
   app.get('/', async (request) => {
-    const { categoryId } = request.query;
-    const where = categoryId ? { categoryId } : {};
+    const { categoryId, restaurantId } = request.query;
+    let where = {};
+    if (categoryId) {
+      where.categoryId = categoryId;
+    } else if (restaurantId) {
+      where.category = { restaurantId };
+    }
     return prisma.dish.findMany({
       where,
       orderBy: { sortOrder: 'asc' },
