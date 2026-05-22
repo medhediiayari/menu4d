@@ -523,15 +523,28 @@
             <div class="menu-card ${dish.featured ? 'featured' : ''}">
               ${img ? `
                 <div class="menu-card-img-wrap">
-                  <img src="${escAttr(img.url)}" alt="${escAttr(dish.name)}" loading="lazy" onclick="openLightbox(this)" />
                   ${arFile ? `
                     <a class="ar-badge" href="${escAttr(arFile.url)}" rel="ar">
+                      <img src="${escAttr(img.url)}" alt="${escAttr(dish.name)}" loading="lazy" onclick="event.preventDefault();openLightbox(this)" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" />
                       <span class="ar-dot"></span>
                       Voir en AR
                     </a>
-                  ` : ''}
+                    <img src="${escAttr(img.url)}" alt="${escAttr(dish.name)}" loading="lazy" onclick="openLightbox(this)" />
+                  ` : `
+                    <img src="${escAttr(img.url)}" alt="${escAttr(dish.name)}" loading="lazy" onclick="openLightbox(this)" />
+                  `}
                 </div>
-              ` : ''}
+              ` : `
+                ${arFile ? `
+                  <div class="menu-card-img-wrap">
+                    <a class="ar-badge ar-badge-solo" href="${escAttr(arFile.url)}" rel="ar">
+                      <img src="" alt="" style="position:absolute;width:0;height:0;opacity:0;" />
+                      <span class="ar-dot"></span>
+                      Voir en AR
+                    </a>
+                  </div>
+                ` : ''}
+              `}
               <div class="menu-card-body">
                 <p class="menu-card-category">${escHtml(dish.subcategory || '')}</p>
                 <h3 class="menu-card-name">${escHtml(dish.name)}</h3>
